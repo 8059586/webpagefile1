@@ -6,10 +6,10 @@ from __future__ import absolute_import, division, print_function
 import string
 import re
 
-from pkg_resources.extern.pyparsing import stringStart, stringEnd, originalTextFor, ParseException
-from pkg_resources.extern.pyparsing import ZeroOrMore, Word, Optional, Regex, Combine
-from pkg_resources.extern.pyparsing import Literal as L  # noqa
-from pkg_resources.extern.six.moves.urllib import parse as urlparse
+from setuptools.extern.pyparsing import stringStart, stringEnd, originalTextFor, ParseException
+from setuptools.extern.pyparsing import ZeroOrMore, Word, Optional, Regex, Combine
+from setuptools.extern.pyparsing import Literal as L  # noqa
+from setuptools.extern.six.moves.urllib import parse as urlparse
 
 from .markers import MARKER_EXPR, Marker
 from .specifiers import LegacySpecifier, Specifier, SpecifierSet
@@ -70,7 +70,7 @@ URL_AND_MARKER = URL + Optional(MARKER)
 NAMED_REQUIREMENT = NAME + Optional(EXTRAS) + (URL_AND_MARKER | VERSION_AND_MARKER)
 
 REQUIREMENT = stringStart + NAMED_REQUIREMENT + stringEnd
-# pkg_resources.extern.pyparsing isn't thread safe during initialization, so we do it eagerly, see
+# setuptools.extern.pyparsing isn't thread safe during initialization, so we do it eagerly, see
 # issue #104
 REQUIREMENT.parseString("x[]")
 
