@@ -1,26 +1,5 @@
-__all__ = [
-    "__version__",
-    "AbstractProvider",
-    "AbstractResolver",
-    "BaseReporter",
-    "InconsistentCandidate",
-    "Resolver",
-    "RequirementsConflicted",
-    "ResolutionError",
-    "ResolutionImpossible",
-    "ResolutionTooDeep",
-]
+from __future__ import absolute_import
 
-__version__ = "0.4.0"
+from . import ssl_match_hostname
 
-
-from .providers import AbstractProvider, AbstractResolver
-from .reporters import BaseReporter
-from .resolvers import (
-    InconsistentCandidate,
-    RequirementsConflicted,
-    Resolver,
-    ResolutionError,
-    ResolutionImpossible,
-    ResolutionTooDeep,
-)
+__all__ = ("ssl_match_hostname",)
