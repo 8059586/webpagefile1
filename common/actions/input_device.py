@@ -14,3 +14,30 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+
+import uuid
+
+
+class InputDevice(object):
+    """
+        Describes the input device being used for the action.
+    """
+    def __init__(self, name=None):
+        if name is None:
+            self.name = uuid.uuid4()
+        else:
+            self.name = name
+
+        self.actions = []
+
+    def add_action(self, action):
+        """
+
+        """
+        self.actions.append(action)
+
+    def clear_actions(self):
+        self.actions = []
+
+    def create_pause(self, duraton=0):
+        pass
