@@ -1,88 +1,171 @@
 Metadata-Version: 2.1
-Name: pip
-Version: 20.2.1
-Summary: The PyPA recommended tool for installing Python packages.
-Home-page: https://pip.pypa.io/
-Author: The pip developers
-Author-email: distutils-sig@python.org
-License: MIT
-Project-URL: Documentation, https://pip.pypa.io
-Project-URL: Source, https://github.com/pypa/pip
-Project-URL: Changelog, https://pip.pypa.io/en/stable/news/
-Keywords: distutils easy_install egg setuptools wheel virtualenv
+Name: selenium
+Version: 3.141.0
+Summary: Python bindings for Selenium
+Home-page: https://github.com/SeleniumHQ/selenium/
+Author: UNKNOWN
+Author-email: UNKNOWN
+License: Apache 2.0
 Platform: UNKNOWN
 Classifier: Development Status :: 5 - Production/Stable
 Classifier: Intended Audience :: Developers
-Classifier: License :: OSI Approved :: MIT License
-Classifier: Topic :: Software Development :: Build Tools
+Classifier: License :: OSI Approved :: Apache Software License
+Classifier: Operating System :: POSIX
+Classifier: Operating System :: Microsoft :: Windows
+Classifier: Operating System :: MacOS :: MacOS X
+Classifier: Topic :: Software Development :: Testing
+Classifier: Topic :: Software Development :: Libraries
 Classifier: Programming Language :: Python
-Classifier: Programming Language :: Python :: 2
 Classifier: Programming Language :: Python :: 2.7
-Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.4
 Classifier: Programming Language :: Python :: 3.5
 Classifier: Programming Language :: Python :: 3.6
-Classifier: Programming Language :: Python :: 3.7
-Classifier: Programming Language :: Python :: 3.8
-Classifier: Programming Language :: Python :: Implementation :: CPython
-Classifier: Programming Language :: Python :: Implementation :: PyPy
-Requires-Python: >=2.7,!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*
+Requires-Dist: urllib3
 
-pip - The Python Package Installer
-==================================
+======================
+Selenium Client Driver
+======================
 
-.. image:: https://img.shields.io/pypi/v/pip.svg
-   :target: https://pypi.org/project/pip/
+Introduction
+============
 
-.. image:: https://readthedocs.org/projects/pip/badge/?version=latest
-   :target: https://pip.pypa.io/en/latest
+Python language bindings for Selenium WebDriver.
 
-pip is the `package installer`_ for Python. You can use pip to install packages from the `Python Package Index`_ and other indexes.
+The `selenium` package is used to automate web browser interaction from Python.
 
-Please take a look at our documentation for how to install and use pip:
++-----------+--------------------------------------------------------------------------------------+
+| **Home**: | http://www.seleniumhq.org                                                            |
++-----------+--------------------------------------------------------------------------------------+
+| **Docs**: | `selenium package API <https://seleniumhq.github.io/selenium/docs/api/py/api.html>`_ |
++-----------+--------------------------------------------------------------------------------------+
+| **Dev**:  | https://github.com/SeleniumHQ/Selenium                                               |
++-----------+--------------------------------------------------------------------------------------+
+| **PyPI**: | https://pypi.org/project/selenium/                                                   |
++-----------+--------------------------------------------------------------------------------------+
+| **IRC**:  | **#selenium** channel on freenode                                                    |
++-----------+--------------------------------------------------------------------------------------+
 
-* `Installation`_
-* `Usage`_
+Several browsers/drivers are supported (Firefox, Chrome, Internet Explorer), as well as the Remote protocol.
 
-We release updates regularly, with a new version every 3 months. Find more details in our documentation:
+Supported Python Versions
+=========================
 
-* `Release notes`_
-* `Release process`_
+* Python 2.7, 3.4+
 
-In 2020, we're working on improvements to the heart of pip. Please `learn more and take our survey`_ to help us do it right.
+Installing
+==========
 
-If you find bugs, need help, or want to talk to the developers, please use our mailing lists or chat rooms:
+If you have `pip <https://pip.pypa.io/>`_ on your system, you can simply install or upgrade the Python bindings::
 
-* `Issue tracking`_
-* `Discourse channel`_
-* `User IRC`_
+    pip install -U selenium
 
-If you want to get involved head over to GitHub to get the source code, look at our development documentation and feel free to jump on the developer mailing lists and chat rooms:
+Alternately, you can download the source distribution from `PyPI <https://pypi.org/project/selenium/#files>`_ (e.g. selenium-3.141.0.tar.gz), unarchive it, and run::
 
-* `GitHub page`_
-* `Development documentation`_
-* `Development mailing list`_
-* `Development IRC`_
+    python setup.py install
 
-Code of Conduct
----------------
+Note: You may want to consider using `virtualenv <http://www.virtualenv.org/>`_ to create isolated Python environments.
 
-Everyone interacting in the pip project's codebases, issue trackers, chat
-rooms, and mailing lists is expected to follow the `PyPA Code of Conduct`_.
+Drivers
+=======
 
-.. _package installer: https://packaging.python.org/guides/tool-recommendations/
-.. _Python Package Index: https://pypi.org
-.. _Installation: https://pip.pypa.io/en/stable/installing.html
-.. _Usage: https://pip.pypa.io/en/stable/
-.. _Release notes: https://pip.pypa.io/en/stable/news.html
-.. _Release process: https://pip.pypa.io/en/latest/development/release-process/
-.. _GitHub page: https://github.com/pypa/pip
-.. _Development documentation: https://pip.pypa.io/en/latest/development
-.. _learn more and take our survey: https://pyfound.blogspot.com/2020/03/new-pip-resolver-to-roll-out-this-year.html
-.. _Issue tracking: https://github.com/pypa/pip/issues
-.. _Discourse channel: https://discuss.python.org/c/packaging
-.. _Development mailing list: https://mail.python.org/mailman3/lists/distutils-sig.python.org/
-.. _User IRC: https://webchat.freenode.net/?channels=%23pypa
-.. _Development IRC: https://webchat.freenode.net/?channels=%23pypa-dev
-.. _PyPA Code of Conduct: https://www.pypa.io/en/latest/code-of-conduct/
+Selenium requires a driver to interface with the chosen browser. Firefox,
+for example, requires `geckodriver <https://github.com/mozilla/geckodriver/releases>`_, which needs to be installed before the below examples can be run. Make sure it's in your `PATH`, e. g., place it in `/usr/bin` or `/usr/local/bin`.
+
+Failure to observe this step will give you an error `selenium.common.exceptions.WebDriverException: Message: 'geckodriver' executable needs to be in PATH.`
+
+Other supported browsers will have their own drivers available. Links to some of the more popular browser drivers follow.
+
++--------------+-----------------------------------------------------------------------+
+| **Chrome**:  | https://sites.google.com/a/chromium.org/chromedriver/downloads        |
++--------------+-----------------------------------------------------------------------+
+| **Edge**:    | https://developer.microsoft.com/en-us/microsoft-edge/tools/webdriver/ |
++--------------+-----------------------------------------------------------------------+
+| **Firefox**: | https://github.com/mozilla/geckodriver/releases                       |
++--------------+-----------------------------------------------------------------------+
+| **Safari**:  | https://webkit.org/blog/6900/webdriver-support-in-safari-10/          |
++--------------+-----------------------------------------------------------------------+
+
+Example 0:
+==========
+
+* open a new Firefox browser
+* load the page at the given URL
+
+.. code-block:: python
+
+    from selenium import webdriver
+
+    browser = webdriver.Firefox()
+    browser.get('http://seleniumhq.org/')
+
+Example 1:
+==========
+
+* open a new Firefox browser
+* load the Yahoo homepage
+* search for "seleniumhq"
+* close the browser
+
+.. code-block:: python
+
+    from selenium import webdriver
+    from selenium.webdriver.common.keys import Keys
+
+    browser = webdriver.Firefox()
+
+    browser.get('http://www.yahoo.com')
+    assert 'Yahoo' in browser.title
+
+    elem = browser.find_element_by_name('p')  # Find the search box
+    elem.send_keys('seleniumhq' + Keys.RETURN)
+
+    browser.quit()
+
+Example 2:
+==========
+
+Selenium WebDriver is often used as a basis for testing web applications.  Here is a simple example using Python's standard `unittest <http://docs.python.org/3/library/unittest.html>`_ library:
+
+.. code-block:: python
+
+    import unittest
+    from selenium import webdriver
+
+    class GoogleTestCase(unittest.TestCase):
+
+        def setUp(self):
+            self.browser = webdriver.Firefox()
+            self.addCleanup(self.browser.quit)
+
+        def testPageTitle(self):
+            self.browser.get('http://www.google.com')
+            self.assertIn('Google', self.browser.title)
+
+    if __name__ == '__main__':
+        unittest.main(verbosity=2)
+
+Selenium Server (optional)
+==========================
+
+For normal WebDriver scripts (non-Remote), the Java server is not needed.
+
+However, to use Selenium Webdriver Remote or the legacy Selenium API (Selenium-RC), you need to also run the Selenium server.  The server requires a Java Runtime Environment (JRE).
+
+Download the server separately, from: http://selenium-release.storage.googleapis.com/3.141/selenium-server-standalone-3.141.0.jar
+
+Run the server from the command line::
+
+    java -jar selenium-server-standalone-3.141.0.jar
+
+Then run your Python client scripts.
+
+Use The Source Luke!
+====================
+
+View source code online:
+
++-----------+-------------------------------------------------------+
+| official: | https://github.com/SeleniumHQ/selenium/tree/master/py |
++-----------+-------------------------------------------------------+
 
 
