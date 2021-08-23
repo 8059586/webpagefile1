@@ -6,17 +6,13 @@ from __future__ import absolute_import, division, print_function
 import string
 import re
 
-from pip._vendor.pyparsing import stringStart, stringEnd, originalTextFor, ParseException
-from pip._vendor.pyparsing import ZeroOrMore, Word, Optional, Regex, Combine
-from pip._vendor.pyparsing import Literal as L  # noqa
-from pip._vendor.six.moves.urllib import parse as urlparse
+from pkg_resources.extern.pyparsing import stringStart, stringEnd, originalTextFor, ParseException
+from pkg_resources.extern.pyparsing import ZeroOrMore, Word, Optional, Regex, Combine
+from pkg_resources.extern.pyparsing import Literal as L  # noqa
+from pkg_resources.extern.six.moves.urllib import parse as urlparse
 
-from ._typing import TYPE_CHECKING
 from .markers import MARKER_EXPR, Marker
 from .specifiers import LegacySpecifier, Specifier, SpecifierSet
-
-if TYPE_CHECKING:  # pragma: no cover
-    from typing import List
 
 
 class InvalidRequirement(ValueError):
@@ -74,7 +70,7 @@ URL_AND_MARKER = URL + Optional(MARKER)
 NAMED_REQUIREMENT = NAME + Optional(EXTRAS) + (URL_AND_MARKER | VERSION_AND_MARKER)
 
 REQUIREMENT = stringStart + NAMED_REQUIREMENT + stringEnd
-# pyparsing isn't thread safe during initialization, so we do it eagerly, see
+# pkg_resources.extern.pyparsing isn't thread safe during initialization, so we do it eagerly, see
 # issue #104
 REQUIREMENT.parseString("x[]")
 
@@ -93,7 +89,6 @@ class Requirement(object):
     # TODO: Can we normalize the name and extra name?
 
     def __init__(self, requirement_string):
-        # type: (str) -> None
         try:
             req = REQUIREMENT.parseString(requirement_string)
         except ParseException as e:
@@ -121,8 +116,7 @@ class Requirement(object):
         self.marker = req.marker if req.marker else None
 
     def __str__(self):
-        # type: () -> str
-        parts = [self.name]  # type: List[str]
+        parts = [self.name]
 
         if self.extras:
             parts.append("[{0}]".format(",".join(sorted(self.extras))))
@@ -141,5 +135,4 @@ class Requirement(object):
         return "".join(parts)
 
     def __repr__(self):
-        # type: () -> str
         return "<Requirement({0!r})>".format(str(self))
