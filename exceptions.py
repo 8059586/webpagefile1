@@ -1,381 +1,323 @@
-"""Exceptions used throughout package"""
-
 from __future__ import absolute_import
 
-from itertools import chain, groupby, repeat
+from .packages.six.moves.http_client import IncompleteRead as httplib_IncompleteRead
 
-from pip._vendor.six import iteritems
-
-from pip._internal.utils.typing import MYPY_CHECK_RUNNING
-
-if MYPY_CHECK_RUNNING:
-    from typing import Any, Optional, List, Dict, Text
-
-    from pip._vendor.pkg_resources import Distribution
-    from pip._vendor.requests.models import Response, Request
-    from pip._vendor.six import PY3
-    from pip._vendor.six.moves import configparser
-
-    from pip._internal.req.req_install import InstallRequirement
-
-    if PY3:
-        from hashlib import _Hash
-    else:
-        from hashlib import _hash as _Hash
+# Base Exceptions
 
 
-class PipError(Exception):
-    """Base pip exception"""
+class HTTPError(Exception):
+    """Base exception used by this module."""
+
+    pass
 
 
-class ConfigurationError(PipError):
-    """General exception in configuration"""
+class HTTPWarning(Warning):
+    """Base warning used by this module."""
+
+    pass
 
 
-class InstallationError(PipError):
-    """General exception during installation"""
+class PoolError(HTTPError):
+    """Base exception for errors caused within a pool."""
+
+    def __init__(self, pool, message):
+        self.pool = pool
+        HTTPError.__init__(self, "%s: %s" % (pool, message))
+
+    def __reduce__(self):
+        # For pickling purposes.
+        return self.__class__, (None, None)
 
 
-class UninstallationError(PipError):
-    """General exception during uninstallation"""
+class RequestError(PoolError):
+    """Base exception for PoolErrors that have associated URLs."""
+
+    def __init__(self, pool, url, message):
+        self.url = url
+        PoolError.__init__(self, pool, message)
+
+    def __reduce__(self):
+        # For pickling purposes.
+        return self.__class__, (None, self.url, None)
 
 
-class NoneMetadataError(PipError):
-    """
-    Raised when accessing "METADATA" or "PKG-INFO" metadata for a
-    pip._vendor.pkg_resources.Distribution object and
-    `dist.has_metadata('METADATA')` returns True but
-    `dist.get_metadata('METADATA')` returns None (and similarly for
-    "PKG-INFO").
-    """
+class SSLError(HTTPError):
+    """Raised when SSL certificate fails in an HTTPS connection."""
 
-    def __init__(self, dist, metadata_name):
-        # type: (Distribution, str) -> None
-        """
-        :param dist: A Distribution object.
-        :param metadata_name: The name of the metadata being accessed
-            (can be "METADATA" or "PKG-INFO").
-        """
-        self.dist = dist
-        self.metadata_name = metadata_name
-
-    def __str__(self):
-        # type: () -> str
-        # Use `dist` in the error message because its stringification
-        # includes more information, like the version and location.
-        return (
-            'None {} metadata found for distribution: {}'.format(
-                self.metadata_name, self.dist,
-            )
-        )
+    pass
 
 
-class DistributionNotFound(InstallationError):
-    """Raised when a distribution cannot be found to satisfy a requirement"""
+class ProxyError(HTTPError):
+    """Raised when the connection to a proxy fails."""
+
+    def __init__(self, message, error, *args):
+        super(ProxyError, self).__init__(message, error, *args)
+        self.original_error = error
 
 
-class RequirementsFileParseError(InstallationError):
-    """Raised when a general error occurs parsing a requirements file line."""
+class DecodeError(HTTPError):
+    """Raised when automatic decoding based on Content-Type fails."""
+
+    pass
 
 
-class BestVersionAlreadyInstalled(PipError):
-    """Raised when the most up-to-date version of a package is already
-    installed."""
+class ProtocolError(HTTPError):
+    """Raised when something unexpected happens mid-request/response."""
+
+    pass
 
 
-class BadCommand(PipError):
-    """Raised when virtualenv or a command is not found"""
+#: Renamed to ProtocolError but aliased for backwards compatibility.
+ConnectionError = ProtocolError
 
 
-class CommandError(PipError):
-    """Raised when there is an error in command-line arguments"""
+# Leaf Exceptions
 
 
-class SubProcessError(PipError):
-    """Raised when there is an error raised while executing a
-    command in subprocess"""
+class MaxRetryError(RequestError):
+    """Raised when the maximum number of retries is exceeded.
 
-
-class PreviousBuildDirError(PipError):
-    """Raised when there's a previous conflicting build directory"""
-
-
-class NetworkConnectionError(PipError):
-    """HTTP connection error"""
-
-    def __init__(self, error_msg, response=None, request=None):
-        # type: (Text, Response, Request) -> None
-        """
-        Initialize NetworkConnectionError with  `request` and `response`
-        objects.
-        """
-        self.response = response
-        self.request = request
-        self.error_msg = error_msg
-        if (self.response is not None and not self.request and
-                hasattr(response, 'request')):
-            self.request = self.response.request
-        super(NetworkConnectionError, self).__init__(
-            error_msg, response, request)
-
-    def __str__(self):
-        # type: () -> str
-        return str(self.error_msg)
-
-
-class InvalidWheelFilename(InstallationError):
-    """Invalid wheel filename."""
-
-
-class UnsupportedWheel(InstallationError):
-    """Unsupported wheel."""
-
-
-class MetadataInconsistent(InstallationError):
-    """Built metadata contains inconsistent information.
-
-    This is raised when the metadata contains values (e.g. name and version)
-    that do not match the information previously obtained from sdist filename
-    or user-supplied ``#egg=`` value.
-    """
-    def __init__(self, ireq, field, built):
-        # type: (InstallRequirement, str, Any) -> None
-        self.ireq = ireq
-        self.field = field
-        self.built = built
-
-    def __str__(self):
-        # type: () -> str
-        return "Requested {} has different {} in metadata: {!r}".format(
-            self.ireq, self.field, self.built,
-        )
-
-
-class HashErrors(InstallationError):
-    """Multiple HashError instances rolled into one for reporting"""
-
-    def __init__(self):
-        # type: () -> None
-        self.errors = []  # type: List[HashError]
-
-    def append(self, error):
-        # type: (HashError) -> None
-        self.errors.append(error)
-
-    def __str__(self):
-        # type: () -> str
-        lines = []
-        self.errors.sort(key=lambda e: e.order)
-        for cls, errors_of_cls in groupby(self.errors, lambda e: e.__class__):
-            lines.append(cls.head)
-            lines.extend(e.body() for e in errors_of_cls)
-        if lines:
-            return '\n'.join(lines)
-        return ''
-
-    def __nonzero__(self):
-        # type: () -> bool
-        return bool(self.errors)
-
-    def __bool__(self):
-        # type: () -> bool
-        return self.__nonzero__()
-
-
-class HashError(InstallationError):
-    """
-    A failure to verify a package against known-good hashes
-
-    :cvar order: An int sorting hash exception classes by difficulty of
-        recovery (lower being harder), so the user doesn't bother fretting
-        about unpinned packages when he has deeper issues, like VCS
-        dependencies, to deal with. Also keeps error reports in a
-        deterministic order.
-    :cvar head: A section heading for display above potentially many
-        exceptions of this kind
-    :ivar req: The InstallRequirement that triggered this error. This is
-        pasted on after the exception is instantiated, because it's not
-        typically available earlier.
+    :param pool: The connection pool
+    :type pool: :class:`~urllib3.connectionpool.HTTPConnectionPool`
+    :param string url: The requested Url
+    :param exceptions.Exception reason: The underlying error
 
     """
-    req = None  # type: Optional[InstallRequirement]
-    head = ''
-    order = None  # type: Optional[int]
 
-    def body(self):
-        # type: () -> str
-        """Return a summary of me for display under the heading.
-
-        This default implementation simply prints a description of the
-        triggering requirement.
-
-        :param req: The InstallRequirement that provoked this error, with
-            its link already populated by the resolver's _populate_link().
-
-        """
-        return '    {}'.format(self._requirement_name())
-
-    def __str__(self):
-        # type: () -> str
-        return '{}\n{}'.format(self.head, self.body())
-
-    def _requirement_name(self):
-        # type: () -> str
-        """Return a description of the requirement that triggered me.
-
-        This default implementation returns long description of the req, with
-        line numbers
-
-        """
-        return str(self.req) if self.req else 'unknown package'
-
-
-class VcsHashUnsupported(HashError):
-    """A hash was provided for a version-control-system-based requirement, but
-    we don't have a method for hashing those."""
-
-    order = 0
-    head = ("Can't verify hashes for these requirements because we don't "
-            "have a way to hash version control repositories:")
-
-
-class DirectoryUrlHashUnsupported(HashError):
-    """A hash was provided for a version-control-system-based requirement, but
-    we don't have a method for hashing those."""
-
-    order = 1
-    head = ("Can't verify hashes for these file:// requirements because they "
-            "point to directories:")
-
-
-class HashMissing(HashError):
-    """A hash was needed for a requirement but is absent."""
-
-    order = 2
-    head = ('Hashes are required in --require-hashes mode, but they are '
-            'missing from some requirements. Here is a list of those '
-            'requirements along with the hashes their downloaded archives '
-            'actually had. Add lines like these to your requirements files to '
-            'prevent tampering. (If you did not enable --require-hashes '
-            'manually, note that it turns on automatically when any package '
-            'has a hash.)')
-
-    def __init__(self, gotten_hash):
-        # type: (str) -> None
-        """
-        :param gotten_hash: The hash of the (possibly malicious) archive we
-            just downloaded
-        """
-        self.gotten_hash = gotten_hash
-
-    def body(self):
-        # type: () -> str
-        # Dodge circular import.
-        from pip._internal.utils.hashes import FAVORITE_HASH
-
-        package = None
-        if self.req:
-            # In the case of URL-based requirements, display the original URL
-            # seen in the requirements file rather than the package name,
-            # so the output can be directly copied into the requirements file.
-            package = (self.req.original_link if self.req.original_link
-                       # In case someone feeds something downright stupid
-                       # to InstallRequirement's constructor.
-                       else getattr(self.req, 'req', None))
-        return '    {} --hash={}:{}'.format(package or 'unknown package',
-                                            FAVORITE_HASH,
-                                            self.gotten_hash)
-
-
-class HashUnpinned(HashError):
-    """A requirement had a hash specified but was not pinned to a specific
-    version."""
-
-    order = 3
-    head = ('In --require-hashes mode, all requirements must have their '
-            'versions pinned with ==. These do not:')
-
-
-class HashMismatch(HashError):
-    """
-    Distribution file hash values don't match.
-
-    :ivar package_name: The name of the package that triggered the hash
-        mismatch. Feel free to write to this after the exception is raise to
-        improve its error message.
-
-    """
-    order = 4
-    head = ('THESE PACKAGES DO NOT MATCH THE HASHES FROM THE REQUIREMENTS '
-            'FILE. If you have updated the package versions, please update '
-            'the hashes. Otherwise, examine the package contents carefully; '
-            'someone may have tampered with them.')
-
-    def __init__(self, allowed, gots):
-        # type: (Dict[str, List[str]], Dict[str, _Hash]) -> None
-        """
-        :param allowed: A dict of algorithm names pointing to lists of allowed
-            hex digests
-        :param gots: A dict of algorithm names pointing to hashes we
-            actually got from the files under suspicion
-        """
-        self.allowed = allowed
-        self.gots = gots
-
-    def body(self):
-        # type: () -> str
-        return '    {}:\n{}'.format(self._requirement_name(),
-                                    self._hash_comparison())
-
-    def _hash_comparison(self):
-        # type: () -> str
-        """
-        Return a comparison of actual and expected hash values.
-
-        Example::
-
-               Expected sha256 abcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcde
-                            or 123451234512345123451234512345123451234512345
-                    Got        bcdefbcdefbcdefbcdefbcdefbcdefbcdefbcdefbcdef
-
-        """
-        def hash_then_or(hash_name):
-            # type: (str) -> chain[str]
-            # For now, all the decent hashes have 6-char names, so we can get
-            # away with hard-coding space literals.
-            return chain([hash_name], repeat('    or'))
-
-        lines = []  # type: List[str]
-        for hash_name, expecteds in iteritems(self.allowed):
-            prefix = hash_then_or(hash_name)
-            lines.extend(('        Expected {} {}'.format(next(prefix), e))
-                         for e in expecteds)
-            lines.append('             Got        {}\n'.format(
-                         self.gots[hash_name].hexdigest()))
-        return '\n'.join(lines)
-
-
-class UnsupportedPythonVersion(InstallationError):
-    """Unsupported python version according to Requires-Python package
-    metadata."""
-
-
-class ConfigurationFileCouldNotBeLoaded(ConfigurationError):
-    """When there are errors while loading a configuration file
-    """
-
-    def __init__(self, reason="could not be loaded", fname=None, error=None):
-        # type: (str, Optional[str], Optional[configparser.Error]) -> None
-        super(ConfigurationFileCouldNotBeLoaded, self).__init__(error)
+    def __init__(self, pool, url, reason=None):
         self.reason = reason
-        self.fname = fname
-        self.error = error
 
-    def __str__(self):
-        # type: () -> str
-        if self.fname is not None:
-            message_part = " in {}.".format(self.fname)
+        message = "Max retries exceeded with url: %s (Caused by %r)" % (url, reason)
+
+        RequestError.__init__(self, pool, url, message)
+
+
+class HostChangedError(RequestError):
+    """Raised when an existing pool gets a request for a foreign host."""
+
+    def __init__(self, pool, url, retries=3):
+        message = "Tried to open a foreign host with url: %s" % url
+        RequestError.__init__(self, pool, url, message)
+        self.retries = retries
+
+
+class TimeoutStateError(HTTPError):
+    """Raised when passing an invalid state to a timeout"""
+
+    pass
+
+
+class TimeoutError(HTTPError):
+    """Raised when a socket timeout error occurs.
+
+    Catching this error will catch both :exc:`ReadTimeoutErrors
+    <ReadTimeoutError>` and :exc:`ConnectTimeoutErrors <ConnectTimeoutError>`.
+    """
+
+    pass
+
+
+class ReadTimeoutError(TimeoutError, RequestError):
+    """Raised when a socket timeout occurs while receiving data from a server"""
+
+    pass
+
+
+# This timeout error does not have a URL attached and needs to inherit from the
+# base HTTPError
+class ConnectTimeoutError(TimeoutError):
+    """Raised when a socket timeout occurs while connecting to a server"""
+
+    pass
+
+
+class NewConnectionError(ConnectTimeoutError, PoolError):
+    """Raised when we fail to establish a new connection. Usually ECONNREFUSED."""
+
+    pass
+
+
+class EmptyPoolError(PoolError):
+    """Raised when a pool runs out of connections and no more are allowed."""
+
+    pass
+
+
+class ClosedPoolError(PoolError):
+    """Raised when a request enters a pool after the pool has been closed."""
+
+    pass
+
+
+class LocationValueError(ValueError, HTTPError):
+    """Raised when there is something wrong with a given URL input."""
+
+    pass
+
+
+class LocationParseError(LocationValueError):
+    """Raised when get_host or similar fails to parse the URL input."""
+
+    def __init__(self, location):
+        message = "Failed to parse: %s" % location
+        HTTPError.__init__(self, message)
+
+        self.location = location
+
+
+class URLSchemeUnknown(LocationValueError):
+    """Raised when a URL input has an unsupported scheme."""
+
+    def __init__(self, scheme):
+        message = "Not supported URL scheme %s" % scheme
+        super(URLSchemeUnknown, self).__init__(message)
+
+        self.scheme = scheme
+
+
+class ResponseError(HTTPError):
+    """Used as a container for an error reason supplied in a MaxRetryError."""
+
+    GENERIC_ERROR = "too many error responses"
+    SPECIFIC_ERROR = "too many {status_code} error responses"
+
+
+class SecurityWarning(HTTPWarning):
+    """Warned when performing security reducing actions"""
+
+    pass
+
+
+class SubjectAltNameWarning(SecurityWarning):
+    """Warned when connecting to a host with a certificate missing a SAN."""
+
+    pass
+
+
+class InsecureRequestWarning(SecurityWarning):
+    """Warned when making an unverified HTTPS request."""
+
+    pass
+
+
+class SystemTimeWarning(SecurityWarning):
+    """Warned when system time is suspected to be wrong"""
+
+    pass
+
+
+class InsecurePlatformWarning(SecurityWarning):
+    """Warned when certain TLS/SSL configuration is not available on a platform."""
+
+    pass
+
+
+class SNIMissingWarning(HTTPWarning):
+    """Warned when making a HTTPS request without SNI available."""
+
+    pass
+
+
+class DependencyWarning(HTTPWarning):
+    """
+    Warned when an attempt is made to import a module with missing optional
+    dependencies.
+    """
+
+    pass
+
+
+class ResponseNotChunked(ProtocolError, ValueError):
+    """Response needs to be chunked in order to read it as chunks."""
+
+    pass
+
+
+class BodyNotHttplibCompatible(HTTPError):
+    """
+    Body should be :class:`http.client.HTTPResponse` like
+    (have an fp attribute which returns raw chunks) for read_chunked().
+    """
+
+    pass
+
+
+class IncompleteRead(HTTPError, httplib_IncompleteRead):
+    """
+    Response length doesn't match expected Content-Length
+
+    Subclass of :class:`http.client.IncompleteRead` to allow int value
+    for ``partial`` to avoid creating large objects on streamed reads.
+    """
+
+    def __init__(self, partial, expected):
+        super(IncompleteRead, self).__init__(partial, expected)
+
+    def __repr__(self):
+        return "IncompleteRead(%i bytes read, %i more expected)" % (
+            self.partial,
+            self.expected,
+        )
+
+
+class InvalidChunkLength(HTTPError, httplib_IncompleteRead):
+    """Invalid chunk length in a chunked response."""
+
+    def __init__(self, response, length):
+        super(InvalidChunkLength, self).__init__(
+            response.tell(), response.length_remaining
+        )
+        self.response = response
+        self.length = length
+
+    def __repr__(self):
+        return "InvalidChunkLength(got length %r, %i bytes read)" % (
+            self.length,
+            self.partial,
+        )
+
+
+class InvalidHeader(HTTPError):
+    """The header provided was somehow invalid."""
+
+    pass
+
+
+class ProxySchemeUnknown(AssertionError, URLSchemeUnknown):
+    """ProxyManager does not support the supplied scheme"""
+
+    # TODO(t-8ch): Stop inheriting from AssertionError in v2.0.
+
+    def __init__(self, scheme):
+        # 'localhost' is here because our URL parser parses
+        # localhost:8080 -> scheme=localhost, remove if we fix this.
+        if scheme == "localhost":
+            scheme = None
+        if scheme is None:
+            message = "Proxy URL had no scheme, should start with http:// or https://"
         else:
-            assert self.error is not None
-            message_part = ".\n{}\n".format(self.error)
-        return "Configuration file {}{}".format(self.reason, message_part)
+            message = (
+                "Proxy URL had unsupported scheme %s, should use http:// or https://"
+                % scheme
+            )
+        super(ProxySchemeUnknown, self).__init__(message)
+
+
+class ProxySchemeUnsupported(ValueError):
+    """Fetching HTTPS resources through HTTPS proxies is unsupported"""
+
+    pass
+
+
+class HeaderParsingError(HTTPError):
+    """Raised by assert_header_parsing, but we convert it to a log.warning statement."""
+
+    def __init__(self, defects, unparsed_data):
+        message = "%s, unparsed data: %r" % (defects or "Unknown", unparsed_data)
+        super(HeaderParsingError, self).__init__(message)
+
+
+class UnrewindableBodyError(HTTPError):
+    """urllib3 encountered an error when trying to rewind a body"""
+
+    pass

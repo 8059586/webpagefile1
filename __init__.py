@@ -1,253 +1,85 @@
-"""Extensions to the 'distutils' for large or complex distributions"""
+"""
+Python HTTP library with thread-safe connection pooling, file post support, user friendly, and more
+"""
+from __future__ import absolute_import
 
-import os
-import functools
+# Set default logging handler to avoid "No handler found" warnings.
+import logging
+import warnings
+from logging import NullHandler
 
-# Disabled for now due to: #2228, #2230
-import setuptools.distutils_patch  # noqa: F401
+from . import exceptions
+from ._version import __version__
+from .connectionpool import HTTPConnectionPool, HTTPSConnectionPool, connection_from_url
+from .filepost import encode_multipart_formdata
+from .poolmanager import PoolManager, ProxyManager, proxy_from_url
+from .response import HTTPResponse
+from .util.request import make_headers
+from .util.retry import Retry
+from .util.timeout import Timeout
+from .util.url import get_host
 
-import distutils.core
-import distutils.filelist
-import re
-from distutils.errors import DistutilsOptionError
-from distutils.util import convert_path
-from fnmatch import fnmatchcase
+__author__ = "Andrey Petrov (andrey.petrov@shazow.net)"
+__license__ = "MIT"
+__version__ = __version__
 
-from ._deprecation_warning import SetuptoolsDeprecationWarning
+__all__ = (
+    "HTTPConnectionPool",
+    "HTTPSConnectionPool",
+    "PoolManager",
+    "ProxyManager",
+    "HTTPResponse",
+    "Retry",
+    "Timeout",
+    "add_stderr_logger",
+    "connection_from_url",
+    "disable_warnings",
+    "encode_multipart_formdata",
+    "get_host",
+    "make_headers",
+    "proxy_from_url",
+)
 
-from setuptools.extern.six import PY3, string_types
-from setuptools.extern.six.moves import filter, map
-
-import setuptools.version
-from setuptools.extension import Extension
-from setuptools.dist import Distribution
-from setuptools.depends import Require
-from . import monkey
-
-__metaclass__ = type
-
-
-__all__ = [
-    'setup', 'Distribution', 'Command', 'Extension', 'Require',
-    'SetuptoolsDeprecationWarning',
-    'find_packages'
-]
-
-if PY3:
-    __all__.append('find_namespace_packages')
-
-__version__ = setuptools.version.__version__
-
-bootstrap_install_from = None
-
-# If we run 2to3 on .py files, should we also convert docstrings?
-# Default: yes; assume that we can detect doctests reliably
-run_2to3_on_doctests = True
-# Standard package names for fixer packages
-lib2to3_fixer_packages = ['lib2to3.fixes']
+logging.getLogger(__name__).addHandler(NullHandler())
 
 
-class PackageFinder:
+def add_stderr_logger(level=logging.DEBUG):
     """
-    Generate a list of all Python packages found within a directory
+    Helper for quickly adding a StreamHandler to the logger. Useful for
+    debugging.
+
+    Returns the handler after adding it.
     """
-
-    @classmethod
-    def find(cls, where='.', exclude=(), include=('*',)):
-        """Return a list all Python packages found within directory 'where'
-
-        'where' is the root directory which will be searched for packages.  It
-        should be supplied as a "cross-platform" (i.e. URL-style) path; it will
-        be converted to the appropriate local path syntax.
-
-        'exclude' is a sequence of package names to exclude; '*' can be used
-        as a wildcard in the names, such that 'foo.*' will exclude all
-        subpackages of 'foo' (but not 'foo' itself).
-
-        'include' is a sequence of package names to include.  If it's
-        specified, only the named packages will be included.  If it's not
-        specified, all found packages will be included.  'include' can contain
-        shell style wildcard patterns just like 'exclude'.
-        """
-
-        return list(cls._find_packages_iter(
-            convert_path(where),
-            cls._build_filter('ez_setup', '*__pycache__', *exclude),
-            cls._build_filter(*include)))
-
-    @classmethod
-    def _find_packages_iter(cls, where, exclude, include):
-        """
-        All the packages found in 'where' that pass the 'include' filter, but
-        not the 'exclude' filter.
-        """
-        for root, dirs, files in os.walk(where, followlinks=True):
-            # Copy dirs to iterate over it, then empty dirs.
-            all_dirs = dirs[:]
-            dirs[:] = []
-
-            for dir in all_dirs:
-                full_path = os.path.join(root, dir)
-                rel_path = os.path.relpath(full_path, where)
-                package = rel_path.replace(os.path.sep, '.')
-
-                # Skip directory trees that are not valid packages
-                if ('.' in dir or not cls._looks_like_package(full_path)):
-                    continue
-
-                # Should this package be included?
-                if include(package) and not exclude(package):
-                    yield package
-
-                # Keep searching subdirectories, as there may be more packages
-                # down there, even if the parent was excluded.
-                dirs.append(dir)
-
-    @staticmethod
-    def _looks_like_package(path):
-        """Does a directory look like a package?"""
-        return os.path.isfile(os.path.join(path, '__init__.py'))
-
-    @staticmethod
-    def _build_filter(*patterns):
-        """
-        Given a list of patterns, return a callable that will be true only if
-        the input matches at least one of the patterns.
-        """
-        return lambda name: any(fnmatchcase(name, pat=pat) for pat in patterns)
+    # This method needs to be in this __init__.py to get the __name__ correct
+    # even if urllib3 is vendored within another package.
+    logger = logging.getLogger(__name__)
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+    logger.addHandler(handler)
+    logger.setLevel(level)
+    logger.debug("Added a stderr logging handler to logger: %s", __name__)
+    return handler
 
 
-class PEP420PackageFinder(PackageFinder):
-    @staticmethod
-    def _looks_like_package(path):
-        return True
+# ... Clean up.
+del NullHandler
 
 
-find_packages = PackageFinder.find
-
-if PY3:
-    find_namespace_packages = PEP420PackageFinder.find
-
-
-def _install_setup_requires(attrs):
-    # Note: do not use `setuptools.Distribution` directly, as
-    # our PEP 517 backend patch `distutils.core.Distribution`.
-    class MinimalDistribution(distutils.core.Distribution):
-        """
-        A minimal version of a distribution for supporting the
-        fetch_build_eggs interface.
-        """
-        def __init__(self, attrs):
-            _incl = 'dependency_links', 'setup_requires'
-            filtered = {
-                k: attrs[k]
-                for k in set(_incl) & set(attrs)
-            }
-            distutils.core.Distribution.__init__(self, filtered)
-
-        def finalize_options(self):
-            """
-            Disable finalize_options to avoid building the working set.
-            Ref #2158.
-            """
-
-    dist = MinimalDistribution(attrs)
-
-    # Honor setup.cfg's options.
-    dist.parse_config_files(ignore_option_errors=True)
-    if dist.setup_requires:
-        dist.fetch_build_eggs(dist.setup_requires)
+# All warning filters *must* be appended unless you're really certain that they
+# shouldn't be: otherwise, it's very hard for users to use most Python
+# mechanisms to silence them.
+# SecurityWarning's always go off by default.
+warnings.simplefilter("always", exceptions.SecurityWarning, append=True)
+# SubjectAltNameWarning's should go off once per host
+warnings.simplefilter("default", exceptions.SubjectAltNameWarning, append=True)
+# InsecurePlatformWarning's don't vary between requests, so we keep it default.
+warnings.simplefilter("default", exceptions.InsecurePlatformWarning, append=True)
+# SNIMissingWarnings should go off only once.
+warnings.simplefilter("default", exceptions.SNIMissingWarning, append=True)
 
 
-def setup(**attrs):
-    # Make sure we have any requirements needed to interpret 'attrs'.
-    _install_setup_requires(attrs)
-    return distutils.core.setup(**attrs)
-
-
-setup.__doc__ = distutils.core.setup.__doc__
-
-
-_Command = monkey.get_unpatched(distutils.core.Command)
-
-
-class Command(_Command):
-    __doc__ = _Command.__doc__
-
-    command_consumes_arguments = False
-
-    def __init__(self, dist, **kw):
-        """
-        Construct the command for dist, updating
-        vars(self) with any keyword parameters.
-        """
-        _Command.__init__(self, dist)
-        vars(self).update(kw)
-
-    def _ensure_stringlike(self, option, what, default=None):
-        val = getattr(self, option)
-        if val is None:
-            setattr(self, option, default)
-            return default
-        elif not isinstance(val, string_types):
-            raise DistutilsOptionError("'%s' must be a %s (got `%s`)"
-                                       % (option, what, val))
-        return val
-
-    def ensure_string_list(self, option):
-        r"""Ensure that 'option' is a list of strings.  If 'option' is
-        currently a string, we split it either on /,\s*/ or /\s+/, so
-        "foo bar baz", "foo,bar,baz", and "foo,   bar baz" all become
-        ["foo", "bar", "baz"].
-        """
-        val = getattr(self, option)
-        if val is None:
-            return
-        elif isinstance(val, string_types):
-            setattr(self, option, re.split(r',\s*|\s+', val))
-        else:
-            if isinstance(val, list):
-                ok = all(isinstance(v, string_types) for v in val)
-            else:
-                ok = False
-            if not ok:
-                raise DistutilsOptionError(
-                    "'%s' must be a list of strings (got %r)"
-                    % (option, val))
-
-    def reinitialize_command(self, command, reinit_subcommands=0, **kw):
-        cmd = _Command.reinitialize_command(self, command, reinit_subcommands)
-        vars(cmd).update(kw)
-        return cmd
-
-
-def _find_all_simple(path):
+def disable_warnings(category=exceptions.HTTPWarning):
     """
-    Find all files under 'path'
+    Helper for quickly disabling all urllib3 warnings.
     """
-    results = (
-        os.path.join(base, file)
-        for base, dirs, files in os.walk(path, followlinks=True)
-        for file in files
-    )
-    return filter(os.path.isfile, results)
-
-
-def findall(dir=os.curdir):
-    """
-    Find all files under 'dir' and return the list of full filenames.
-    Unless dir is '.', return full filenames with dir prepended.
-    """
-    files = _find_all_simple(dir)
-    if dir == os.curdir:
-        make_rel = functools.partial(os.path.relpath, start=dir)
-        files = map(make_rel, files)
-    return list(files)
-
-
-class sic(str):
-    """Treat this string as-is (https://en.wikipedia.org/wiki/Sic)"""
-
-
-# Apply monkey patches
-monkey.patch_all()
+    warnings.simplefilter("ignore", category)
